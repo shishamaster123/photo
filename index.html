@@ -118,6 +118,7 @@ button.fr{cursor:pointer}
   <button class="btn alt" id="selAll" type="button">Отметить все</button>
   <button class="btn alt" id="selNone" type="button">Снять</button>
   <button class="btn alt" id="regenRest" type="button" hidden>↻ Пересоздать без отметок</button>
+  <button class="btn alt" id="zipBtn" type="button" hidden disabled>Скачать ZIP</button>
   <button class="btn red" id="save" type="button" disabled>Сохранить отмеченные</button>
 </div></div>
 <p class="hint" id="hint">Нажми на вариант, чтобы отметить его. Если у товара ничего не подошло, нажми «↻ Пересоздать» рядом с его названием: отмеченные варианты останутся, остальные заменятся новыми. На айфоне после «Сохранить отмеченные» выбери «Сохранить изображения»: все отмеченные фото попадут в галерею разом.</p>
@@ -135,6 +136,8 @@ const st = {mode:'u', level:'strong', copies:2};
 try { Object.assign(st, JSON.parse(localStorage.getItem('pu-set2') || '{}')); } catch (e) {}
 let sources = [], running = 0, dl = null;
 const inClaude = () => !!window.claude;
+const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+const desktop = () => !inClaude() && !isMobile;
 
 const rnd = () => crypto.getRandomValues(new Uint32Array(1))[0] / 4294967296;
 const rand = (a, b) => a + rnd() * (b - a);
@@ -289,7 +292,9 @@ function paintBar() {
   const v = allVars(), n = v.filter(r => r.sel).length, rest = unmarked();
   $('nsel').textContent = n; $('nall').textContent = v.length;
   $('save').disabled = !n;
-  $('save').textContent = n ? `Сохранить отмеченные (${n})` : 'Сохранить отмеченные';
+  const verb = desktop() ? 'Скачать отмеченные' : 'Сохранить отмеченные';
+  $('save').textContent = n ? `${verb} (${n})` : verb;
+  $('zipBtn').hidden = !desktop(); $('zipBtn').disabled = n < 2;
   const show = st.mode === 'u' && rest.length && rest.length < sources.length;
   $('regenRest').hidden = !show;
   if (show) $('regenRest').textContent = `↻ Пересоздать без отметок (${rest.length} ${plural(rest.length, 'товар', 'товара', 'товаров')})`;
@@ -423,13 +428,19 @@ function download(blob, name) {
 }
 function flash(text) { const b = $('save'), old = b.textContent; b.textContent = text; setTimeout(() => { b.textContent = old; paintBar(); }, 1800); }
 // Phone: the share sheet saves every picked photo to the gallery at once. Elsewhere: one file, or a ZIP for several.
-async function saveSelected() {
+// Phone: the share sheet puts every picked photo into the gallery. Computer: each photo is downloaded
+// as its own file (or one ZIP on request), because a computer's share menu doesn't save anything.
+async function saveSelected(asZip) {
   const list = allVars().filter(r => r.sel);
   if (!list.length) return;
   if (!inClaude()) {
     const files = list.map(r => new File([r.blob], r.name, {type: 'image/jpeg'}));
-    if (canShare(files)) {
+    if (isMobile && !asZip && canShare(files)) {
       try { await navigator.share({files}); } catch (e) { if (e.name !== 'AbortError') flash('Не вышло, попробуй ещё'); }
+      return;
+    }
+    if (!asZip || list.length === 1) {
+      for (const r of list) { download(r.blob, r.name); await new Promise(ok => setTimeout(ok, 400)); }
       return;
     }
   }
@@ -465,7 +476,8 @@ $('strip').addEventListener('click', e => {
 const selectAll = v => { allVars().forEach(r => r.sel = v); for (const b of document.querySelectorAll('button.fr')) { b.setAttribute('aria-pressed', v); b.classList.remove('new'); } paintBar(); };
 $('selAll').onclick = () => selectAll(true);
 $('selNone').onclick = () => selectAll(false);
-$('save').onclick = saveSelected;
+$('save').onclick = () => saveSelected(false);
+$('zipBtn').onclick = () => saveSelected(true);
 
 paintControls(); paintBar();
 (async () => {
@@ -482,6 +494,7 @@ function initClaude() {
 }
 initClaude(); setTimeout(initClaude, 1500);
 if (!inClaude() && navigator.serviceWorker) navigator.serviceWorker.register('sw.js').catch(() => {});
+if (desktop()) $('hint').textContent = 'Нажми на вариант, чтобы отметить его. «↻ Пересоздать» у товара меняет только его неотмеченные варианты. «Скачать отмеченные» сохранит каждое фото отдельным файлом в «Загрузки»; если браузер спросит про загрузку нескольких файлов, нажми «Разрешить». «Скачать ZIP» соберёт их в один архив.';
 window.__pu = {zip, results: allVars, idle: () => chain};
 }
 </script>
