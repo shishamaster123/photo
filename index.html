@@ -78,7 +78,9 @@ button:focus-visible,label.btn:focus-within,.switch input:focus-visible{outline:
 .ib:hover{border-color:#fff}
 .ib[aria-pressed=true]{background:var(--red);border-color:var(--red)}
 .sw{width:22px;height:22px;border-radius:4px;border:1px solid rgba(255,255,255,.5);background-size:cover;background-position:center;flex:none}
-.colh{font-size:13px;color:#bdbdbd;align-self:end;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.colh{font-size:13px;color:#bdbdbd;align-self:end;display:grid;gap:6px}
+.colh .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.colh .ib{justify-self:start;min-height:34px;font-size:13px}
 .colh b{font:600 14px/1 Unbounded,system-ui,sans-serif;color:#fff;margin-right:6px}
 .fr{margin:0;display:grid;gap:5px;font:inherit;color:inherit;background:none;border:0;padding:0;text-align:start;position:relative}
 button.fr{cursor:pointer}
@@ -118,7 +120,7 @@ dialog::backdrop{background:rgba(0,0,0,.5)}
   <div class="top">
     <div>
       <h1>Уникализатор фото</h1>
-      <p class="lead">Загрузи <b>все фото одной вещи</b>. Каждая буква — отдельный <b>комплект для объявления</b>: все фото комплекта на одном новом фоне, с лёгким наклоном, обрезкой и сдвигом цвета. <b>Метаданные удаляются автоматически.</b> Фото никуда не отправляются, всё считается на устройстве.</p>
+      <p class="lead">Загрузи <b>все фото одной вещи</b>. Каждая буква — отдельный <b>комплект для объявления</b>: товар вырезается и ставится на одну сцену с тенью, плюс лёгкий наклон, обрезка и сдвиг цвета. Крупные планы (стелька, бирка) остаются на своём фоне. <b>Метаданные удаляются автоматически.</b> Фото никуда не отправляются, всё считается на устройстве.</p>
     </div>
     <div class="ctl">
       <div class="pick">
@@ -135,10 +137,9 @@ dialog::backdrop{background:rgba(0,0,0,.5)}
         <button class="btn alt sm" id="again" type="button">Пересоздать всё</button>
       </div>
       <div class="row" id="bgRow"><span class="lbl">Фон</span>
-        <label class="switch"><input type="checkbox" id="bgOn" role="switch"> Менять фон</label>
+        <label class="switch"><input type="checkbox" id="bgOn" role="switch"> Ставить на сцену</label>
       </div>
       <div class="row" id="kindRow">
-        <div class="chips" id="kinds"><button class="chip" type="button" data-k="solid">Однотонные</button><button class="chip" type="button" data-k="studio">Студийные</button><button class="chip" type="button" data-k="texture">Текстуры</button><button class="chip" type="button" data-k="custom">Свои</button></div>
         <label class="btn alt sm" for="bgFile">Загрузить свои фоны<input id="bgFile" class="vh" type="file" accept="image/*" multiple></label>
       </div>
       <p class="note" id="bgNote"></p>
@@ -157,7 +158,7 @@ dialog::backdrop{background:rgba(0,0,0,.5)}
   <button class="btn alt" id="zipBtn" type="button" hidden disabled>Скачать ZIP</button>
   <button class="btn red" id="save" type="button" disabled>Сохранить отмеченные</button>
 </div></div>
-<p class="hint" id="hint">Нажми на фото, чтобы отметить его, или «✓» у буквы, чтобы отметить весь комплект. «Фон» у буквы меняет фон всего комплекта, «↻» пересоздаёт его неотмеченные фото. На айфоне после «Сохранить отмеченные» выбери «Сохранить изображения».</p>
+<p class="hint" id="hint">Нажми на фото, чтобы отметить его, или «✓» у буквы, чтобы отметить весь комплект. «Фон» у буквы меняет сцену всего комплекта, «↻» пересоздаёт его неотмеченные фото. На айфоне после «Сохранить отмеченные» выбери «Сохранить изображения».</p>
 
 <dialog id="dlg"><div class="dlg">
   <h2 id="dlgTitle">Фон комплекта</h2>
@@ -174,8 +175,8 @@ const P = {
   strong: {persp:[3.5,6], angle:[2,4],    crop:[.05,.1],  bri:.08, sat:.08, hue:4, con:.08, tint:.03,  sh:[.45,.8],  q:[88,92]}
 };
 const MAX_U = 2560, MAX_S = 4096, THUMB = 420, LETTERS = 'ABCDEFGH';
-const st = {mode: 'u', level: 'strong', sets: 2, bg: true, kinds: {solid: true, studio: true, texture: true, custom: true}};
-try { Object.assign(st, JSON.parse(localStorage.getItem('pu-set3') || '{}')); } catch (e) {}
+const st = {mode: 'u', level: 'strong', sets: 2, bg: true};
+try { Object.assign(st, JSON.parse(localStorage.getItem('pu-set4') || '{}')); } catch (e) {}
 const inClaude = () => !!window.claude;
 const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 const desktop = () => !inClaude() && !isMobile;
@@ -283,122 +284,198 @@ async function uniquify(base, look, p) {
   return {blob, w: ow, h: oh, thumb: th};
 }
 
-// ---- Backgrounds. Every set has one background and one seed, so all its photos get the same backdrop.
-const PRESETS = [
-  {k:'solid', n:'Белый', c:'#f5f5f2'}, {k:'solid', n:'Светло-серый', c:'#e1e1de'}, {k:'solid', n:'Бежевый', c:'#ece2d4'},
-  {k:'solid', n:'Песочный', c:'#d9c6a8'}, {k:'solid', n:'Пудровый', c:'#efd9d4'}, {k:'solid', n:'Шалфей', c:'#d5dfcf'},
-  {k:'solid', n:'Голубой', c:'#d3e1ea'}, {k:'solid', n:'Графит', c:'#3b3d40'},
-  {k:'studio', n:'Белая студия', a:'#ffffff', b:'#d5d5d2'}, {k:'studio', n:'Тёплая студия', a:'#f8f0e5', b:'#d3c0a5'},
-  {k:'studio', n:'Холодная студия', a:'#eef3f6', b:'#b9c9d4'}, {k:'studio', n:'Розовая студия', a:'#fcf0ee', b:'#e0bfbb'},
-  {k:'studio', n:'Тёмная студия', a:'#64686d', b:'#1d1e20'},
-  {k:'texture', n:'Светлое дерево', t:'wood', c:'#c9a477'}, {k:'texture', n:'Тёмное дерево', t:'wood', c:'#6b472c'},
-  {k:'texture', n:'Бетон', t:'concrete', c:'#a7a6a1'}, {k:'texture', n:'Лён', t:'linen', c:'#ddd3c2'},
-  {k:'texture', n:'Мрамор', t:'marble', c:'#f2f1ed'}, {k:'texture', n:'Крафт', t:'paper', c:'#c6a575'}
-];
-PRESETS.forEach((p, i) => p.id = 'p' + i);
-const KIND_NAMES = {solid: 'Однотонные', studio: 'Студийные', texture: 'Текстуры', custom: 'Свои'};
 
-function seeded(seed) {
-  let s = seed >>> 0;
-  return () => { s = s + 0x6D2B79F5 | 0; let t = Math.imul(s ^ s >>> 15, 1 | s); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+// ---- Scenes: real photo backdrops (wall + floor) the product is placed into, the way Photoroom does it:
+// centred, fitted into 80% of the frame, with a contact shadow and a soft cast shadow shaped like the product.
+// skew: where the cast shadow leans (-1 left .. 1 right), len: its length, dark: its strength.
+const SCENES = [
+  {id: 's1', n: 'Бетон', file: 'concrete', skew: .15, len: .22, dark: .42},
+  {id: 's3', n: 'Тёмное дерево', file: 'darkwood', skew: 0, len: .16, dark: .55},
+  {id: 's5', n: 'Серая студия', file: 'greystudio', skew: .1, len: .2, dark: .38},
+  {id: 's6', n: 'Бежевая стена', file: 'beige', skew: -.3, len: .22, dark: .4},
+  {id: 's7', n: 'Тёмно-синяя ткань', file: 'navy', skew: 0, len: .18, dark: .55},
+  {id: 's9', n: 'Мрамор', file: 'marble', skew: .4, len: .24, dark: .42}
+].filter(s => !s.missing);
+const plateCache = new Map();
+const plateUrl = (s, small) => new URL(`scenes/${s.file}${small ? '_s' : ''}.jpg`, location.href).href;
+function loadPlate(spec) {
+  if (spec.k === 'custom') return Promise.resolve(spec.img);
+  if (!plateCache.has(spec.id)) plateCache.set(spec.id, new Promise((ok, no) => { const i = new Image(); i.onload = () => ok(i); i.onerror = () => { plateCache.delete(spec.id); no(new Error('фон не загрузился')); }; i.src = plateUrl(spec); }));
+  return plateCache.get(spec.id);
 }
-function rgbOf(hex) { const n = parseInt(hex.slice(1), 16); return [n >> 16, n >> 8 & 255, n & 255]; }
-function shade(hex, f) { return 'rgb(' + rgbOf(hex).map(v => Math.max(0, Math.min(255, Math.round(f > 0 ? v + (255 - v) * f : v * (1 + f))))).join(',') + ')'; }
-const isDark = spec => spec.k !== 'custom' && rgbOf(spec.c || spec.b).reduce((a, v) => a + v, 0) < 300;
-function grain(g, w, h, amt, R) {
-  if (amt <= 0) return;
-  const im = g.getImageData(0, 0, w, h), d = im.data;
-  for (let i = 0; i < d.length; i += 4) { const n = (R() - .5) * amt; d[i] += n; d[i+1] += n; d[i+2] += n; }
-  g.putImageData(im, 0, 0);
-}
-function blotches(g, w, h, R, n, alpha) {
-  for (let i = 0; i < n; i++) {
-    const x = R() * w, y = R() * h, r = (.08 + R() * .3) * Math.max(w, h), gr = g.createRadialGradient(x, y, 0, x, y, r);
-    const c = R() < .5 ? '0,0,0' : '255,255,255';
-    gr.addColorStop(0, `rgba(${c},${alpha * R()})`); gr.addColorStop(1, `rgba(${c},0)`);
-    g.fillStyle = gr; g.fillRect(0, 0, w, h);
-  }
-}
-function renderBg(spec, w, h, seed, detail = true) {
-  const c = canvas(w, h), g = c.getContext('2d'), R = seeded(seed), u = Math.min(w, h) / 100;
-  if (spec.k === 'custom') {
-    const im = spec.img, k = Math.max(w / im.naturalWidth, h / im.naturalHeight), iw = im.naturalWidth * k, ih = im.naturalHeight * k;
-    g.drawImage(im, (w - iw) / 2, (h - ih) / 2, iw, ih);
-    return c;
-  }
-  if (spec.k === 'solid') { g.fillStyle = spec.c; g.fillRect(0, 0, w, h); if (detail) grain(g, w, h, 3, R); return c; }
-  if (spec.k === 'studio') {
-    const lg = g.createLinearGradient(0, 0, 0, h); lg.addColorStop(0, spec.a); lg.addColorStop(.62, shade(spec.a, -.04)); lg.addColorStop(1, spec.b);
-    g.fillStyle = lg; g.fillRect(0, 0, w, h);
-    const x = w * (.42 + R() * .16), rg = g.createRadialGradient(x, h * .38, 0, x, h * .38, Math.max(w, h) * .7);
-    rg.addColorStop(0, 'rgba(255,255,255,.35)'); rg.addColorStop(1, 'rgba(255,255,255,0)');
-    g.fillStyle = rg; g.fillRect(0, 0, w, h);
-    if (detail) grain(g, w, h, 3, R);
-    return c;
-  }
-  g.fillStyle = spec.c; g.fillRect(0, 0, w, h);
-  if (spec.t === 'wood') {
-    const plank = u * (18 + R() * 8);
-    for (let y = -R() * plank; y < h; y += plank) {
-      g.fillStyle = shade(spec.c, (R() - .5) * .18); g.fillRect(0, y, w, plank);
-      for (let n = 0; n < 34; n++) {
-        const yy = y + R() * plank, amp = R() * u * 1.4, per = (14 + R() * 50) * u, ph = R() * 6.3;
-        g.strokeStyle = `rgba(50,25,8,${.04 + R() * .09})`; g.lineWidth = u * (.12 + R() * .45);
-        g.beginPath();
-        for (let x = 0; x <= w + u * 4; x += u * 4) { const yv = yy + Math.sin(x / per + ph) * amp; x ? g.lineTo(x, yv) : g.moveTo(x, yv); }
-        g.stroke();
-      }
-      g.fillStyle = 'rgba(0,0,0,.28)'; g.fillRect(0, y, w, Math.max(1, u * .22));
-    }
-    if (detail) grain(g, w, h, 10, R);
-  } else if (spec.t === 'concrete') {
-    blotches(g, w, h, R, 26, .12);
-    for (let n = 0; n < 900; n++) { g.fillStyle = `rgba(0,0,0,${.05 + R() * .18})`; const r = u * (.08 + R() * .3); g.beginPath(); g.arc(R() * w, R() * h, r, 0, 6.3); g.fill(); }
-    if (detail) grain(g, w, h, 24, R);
-  } else if (spec.t === 'linen') {
-    const step = Math.max(2, u * .7);
-    for (let y = 0; y < h; y += step) { g.fillStyle = `rgba(80,60,30,${.03 + R() * .07})`; g.fillRect(0, y, w, step * .45); }
-    for (let x = 0; x < w; x += step) { g.fillStyle = `rgba(255,255,255,${.04 + R() * .08})`; g.fillRect(x, 0, step * .45, h); }
-    blotches(g, w, h, R, 10, .06);
-    if (detail) grain(g, w, h, 8, R);
-  } else if (spec.t === 'marble') {
-    blotches(g, w, h, R, 12, .05);
-    for (let v = 0; v < 7; v++) {
-      const pts = [[-.1 * w, R() * h]]; for (let i = 1; i <= 4; i++) pts.push([i / 4 * w * 1.2 - .1 * w, R() * h]);
-      for (const [lw, a] of [[3, .035], [1.1, .08], [.3, .28]]) {
-        g.strokeStyle = `rgba(110,110,115,${a})`; g.lineWidth = u * lw * (.6 + R() * .8);
-        g.beginPath(); g.moveTo(...pts[0]);
-        for (let i = 1; i < pts.length - 1; i++) g.quadraticCurveTo(pts[i][0], pts[i][1], (pts[i][0] + pts[i+1][0]) / 2, (pts[i][1] + pts[i+1][1]) / 2);
-        g.lineTo(...pts[pts.length - 1]); g.stroke();
-      }
-    }
-    if (detail) grain(g, w, h, 4, R);
-  } else if (spec.t === 'paper') {
-    blotches(g, w, h, R, 20, .1);
-    for (let n = 0; n < 1400; n++) { g.strokeStyle = `rgba(60,40,15,${.04 + R() * .08})`; g.lineWidth = u * .12; const x = R() * w, y = R() * h, a = R() * 6.3, l = u * (.5 + R() * 2.5); g.beginPath(); g.moveTo(x, y); g.lineTo(x + Math.cos(a) * l, y + Math.sin(a) * l); g.stroke(); }
-    if (detail) grain(g, w, h, 16, R);
-  }
-  return c;
-}
-const swatchCache = new Map();
-function swatch(spec) {
-  const key = spec.id;
-  if (!swatchCache.has(key)) { const c = renderBg(spec, 240, 180, 7, true); swatchCache.set(key, c.toDataURL('image/jpeg', .8)); c.width = c.height = 0; }
-  return swatchCache.get(key);
-}
-function pool() {
-  const list = PRESETS.filter(p => st.kinds[p.k]);
-  if (st.kinds.custom) list.push(...customs);
-  return list.length ? list : PRESETS.filter(p => p.k === 'solid');
-}
-// Picks backgrounds for new sets: no repeats while the pool lasts, kinds mixed.
+const swatch = spec => spec.k === 'custom' ? spec.thumb : plateUrl(spec, true);
+function pool() { return [...SCENES, ...customs]; }
 function pickBgs(n, taken = []) {
-  const left = pool().filter(p => !taken.includes(p));
-  const out = [];
-  for (let i = 0; i < n; i++) {
-    const from = left.length ? left : pool();
-    out.push(from.splice(Math.floor(rnd() * from.length), 1)[0] || from[0]);
+  const left = pool().filter(p => !taken.includes(p)), out = [];
+  for (let i = 0; i < n; i++) { const from = left.length ? left : pool(); out.push(from.splice(Math.floor(rnd() * from.length), 1)[0] || from[0]); }
+  return out;
+}
+
+// ---- Cut-out clean-up: drops stray specks, half-transparent leftovers of the old shadow, and the 1–2 px
+// rim of old background around the product. Returns the product cropped to its box, plus that box.
+function refineCut(cutImg, base) {
+  const W = cutImg.naturalWidth, H = cutImg.naturalHeight;
+  // islands: label the mask at small size, keep pieces of a reasonable size
+  const k = 256 / Math.max(W, H), sw = Math.max(1, Math.round(W * k)), sh = Math.max(1, Math.round(H * k));
+  const sc = canvas(sw, sh), sg = sc.getContext('2d'); sg.drawImage(cutImg, 0, 0, sw, sh);
+  const sd = sg.getImageData(0, 0, sw, sh).data, lab = new Int32Array(sw * sh), sizes = [0];
+  for (let p = 0; p < sw * sh; p++) {
+    if (lab[p] || sd[p * 4 + 3] < 110) continue;
+    const id = sizes.length; let n = 0; const st = [p]; lab[p] = id;
+    while (st.length) {
+      const q = st.pop(); n++;
+      const x = q % sw, y = (q / sw) | 0;
+      for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]]) {
+        const nx = x + dx, ny = y + dy; if (nx < 0 || ny < 0 || nx >= sw || ny >= sh) continue;
+        const r = ny * sw + nx; if (!lab[r] && sd[r * 4 + 3] >= 110) { lab[r] = id; st.push(r); }
+      }
+    }
+    sizes.push(n);
   }
+  const big = Math.max(0, ...sizes), keep = sizes.map(n => n >= big * .04);
+  const km = canvas(sw, sh), kg = km.getContext('2d'), kd = kg.createImageData(sw, sh);
+  let x0 = sw, x1 = -1, y0 = sh, y1 = -1, area = 0;
+  for (let p = 0; p < sw * sh; p++) if (keep[lab[p]] && lab[p]) {
+    kd.data[p * 4 + 3] = 255; area++;
+    const x = p % sw, y = (p / sw) | 0; if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
+  }
+  sc.width = sc.height = 0;
+  if (x1 < 0 || area < sw * sh * .01) { km.width = km.height = 0; return null; }
+  kg.putImageData(kd, 0, 0);
+  const keepBig = canvas(sw, sh); keepBig.getContext('2d').drawImage(km, 0, 0); // used scaled up with blur from smoothing
+  // full-size pass inside the kept box (with a small margin)
+  const pad = 3 / k, bx = Math.max(0, Math.floor(x0 / k - pad)), by = Math.max(0, Math.floor(y0 / k - pad));
+  const bw = Math.min(W, Math.ceil((x1 + 1) / k + pad)) - bx, bh = Math.min(H, Math.ceil((y1 + 1) / k + pad)) - by;
+  const c = canvas(bw, bh), g = c.getContext('2d');
+  g.drawImage(cutImg, bx, by, bw, bh, 0, 0, bw, bh);
+  const m = canvas(bw, bh), mg = m.getContext('2d'); mg.imageSmoothingEnabled = true;
+  mg.drawImage(keepBig, bx * k, by * k, bw * k, bh * k, 0, 0, bw, bh);
+  const md = mg.getImageData(0, 0, bw, bh).data, im = g.getImageData(0, 0, bw, bh), d = im.data;
+  const a0 = new Uint8ClampedArray(bw * bh);
+  for (let p = 0; p < bw * bh; p++) {
+    let a = d[p * 4 + 3] / 255;
+    a = a <= .22 ? 0 : a >= .78 ? 1 : (a - .22) / .56;           // harden: no haze, no half shadow
+    a = a * a * (3 - 2 * a);
+    a0[p] = Math.round(a * Math.min(1, md[p * 4 + 3] / 160) * 255);
+  }
+  const er = Math.max(1, Math.round(Math.max(W, H) / 1400));     // erode the rim of old background
+  for (let p = 0; p < bw * bh; p++) {
+    const x = p % bw, y = (p / bw) | 0; let a = a0[p];
+    if (a) for (let dy = -er; dy <= er && a; dy++) for (let dx = -er; dx <= er; dx++) {
+      const nx = x + dx, ny = y + dy; const v = nx < 0 || ny < 0 || nx >= bw || ny >= bh ? 0 : a0[ny * bw + nx]; if (v < a) a = v;
+    }
+    d[p * 4 + 3] = a;
+  }
+  g.putImageData(im, 0, 0);
+  km.width = km.height = keepBig.width = keepBig.height = m.width = m.height = 0;
+  // tight box around what is actually visible after the clean-up (old shadow leftovers are gone now)
+  let tx0 = bw, tx1 = -1, ty0 = bh, ty1 = -1;
+  for (let y = 0; y < bh; y++) for (let x = 0; x < bw; x++) if (d[(y * bw + x) * 4 + 3] > 40) { if (x < tx0) tx0 = x; if (x > tx1) tx1 = x; if (y < ty0) ty0 = y; if (y > ty1) ty1 = y; }
+  if (tx1 < 0) { c.width = c.height = 0; return null; }
+  const tw = tx1 - tx0 + 1, th = ty1 - ty0 + 1, t = canvas(tw, th);
+  t.getContext('2d').drawImage(c, tx0, ty0, tw, th, 0, 0, tw, th);
+  c.width = c.height = 0;
+  const box = {x0: (bx + tx0) / W, y0: (by + ty0) / H, x1: (bx + tx1 + 1) / W, y1: (by + ty1 + 1) / H, fill: area / (sw * sh), busy: busy(base, cutImg)};
+  return {product: t, box};
+}
+// How busy the photo is around the cut-out. A real background (floor, wall, table) is calm; when the
+// "background" is more of the product (an insole shot, a close-up of the upper), it is full of detail.
+function busy(base, cutImg) {
+  const n = 160, k = n / Math.max(base.width, base.height), w = Math.max(8, Math.round(base.width * k)), h = Math.max(8, Math.round(base.height * k));
+  const a = canvas(w, h), ag = a.getContext('2d'); ag.drawImage(base, 0, 0, w, h);
+  const b = canvas(w, h), bg = b.getContext('2d'); bg.drawImage(cutImg, 0, 0, w, h);
+  const px = ag.getImageData(0, 0, w, h).data, al = bg.getImageData(0, 0, w, h).data;
+  a.width = a.height = b.width = b.height = 0;
+  const L = i => px[i] * .3 + px[i + 1] * .59 + px[i + 2] * .11;
+  let sum = 0, cnt = 0;
+  for (let y = 1; y < h - 1; y++) for (let x = 1; x < w - 1; x++) {
+    const p = (y * w + x) * 4;
+    let near = false;                       // skip the rim of the product
+    for (let dy = -1; dy <= 1 && !near; dy++) for (let dx = -1; dx <= 1; dx++) if (al[((y + dy) * w + x + dx) * 4 + 3] > 20) { near = true; break; }
+    if (near) continue;
+    sum += Math.abs(4 * L(p) - L(p - 4) - L(p + 4) - L(p - w * 4) - L(p + w * 4)); cnt++;
+  }
+  return cnt > w * h * .08 ? sum / cnt : 99;
+}
+const BUSY = 18;
+// Too close to have a background worth changing: an insole, a tag, a detail shot.
+function isCloseup(box) {
+  if (!box) return true;
+  const edges = (box.x0 < .015) + (box.x1 > .985) + (box.y0 < .015) + (box.y1 > .985);
+  return edges >= 3 || box.fill > .55 || ((box.x1 - box.x0) > .9 && (box.y1 - box.y0) > .85) || box.busy > BUSY;
+}
+
+// Fake blur that works everywhere (Safari has no canvas filter): shrink, then grow back with smoothing.
+function soften(src, r) {
+  const f = Math.max(1, r / 2.5), w = Math.max(1, Math.round(src.width / f)), h = Math.max(1, Math.round(src.height / f));
+  const a = canvas(w, h), ag = a.getContext('2d'); ag.imageSmoothingQuality = 'high'; ag.drawImage(src, 0, 0, w, h);
+  const b = canvas(Math.max(1, w >> 1), Math.max(1, h >> 1)), bg = b.getContext('2d'); bg.imageSmoothingQuality = 'high'; bg.drawImage(a, 0, 0, b.width, b.height);
+  ag.clearRect(0, 0, w, h); ag.drawImage(b, 0, 0, w, h);
+  const out = canvas(src.width, src.height), og = out.getContext('2d'); og.imageSmoothingQuality = 'high'; og.drawImage(a, 0, 0, src.width, src.height);
+  a.width = a.height = b.width = b.height = 0;
+  return out;
+}
+function floorTone(plate, W, H) {
+  const c = canvas(16, 16), g = c.getContext('2d'); g.drawImage(plate, 0, H * .78, W, H * .2, 0, 0, 16, 16);
+  const d = g.getImageData(0, 0, 16, 16).data; let r = 0, gg = 0, b = 0;
+  for (let i = 0; i < d.length; i += 4) { r += d[i]; gg += d[i+1]; b += d[i+2]; }
+  const n = d.length / 4; c.width = c.height = 0;
+  return [r / n, gg / n, b / n];
+}
+
+// Places the product into the scene. Output keeps the original photo's proportions.
+async function composeScene(base, prod, set) {
+  const plate = await loadPlate(set.bg);
+  const ar = base.width / base.height, pw = plate.naturalWidth, ph = plate.naturalHeight;
+  let cw = pw, ch = pw / ar; if (ch > ph) { ch = ph; cw = ph * ar; }
+  const k = Math.min(1, MAX_U / Math.max(cw, ch)), W = Math.round(cw * k), H = Math.round(ch * k);
+  const out = canvas(W, H), g = out.getContext('2d');
+  g.drawImage(plate, (pw - cw) / 2, (ph - ch) / 2, cw, ch, 0, 0, W, H);
+  const p = prod.product, s = Math.min(.74 * W / p.width, .74 * H / p.height);
+  const dw = p.width * s, dh = p.height * s, dx = (W - dw) / 2, dy = (H - dh) / 2, foot = dy + dh;
+  // silhouette of the product, black
+  const sil = canvas(W, H), sg = sil.getContext('2d');
+  sg.drawImage(p, dx, dy, dw, dh); sg.globalCompositeOperation = 'source-in'; sg.fillStyle = '#000'; sg.fillRect(0, 0, W, H);
+  const tone = floorTone(plate, W, H), lum = (tone[0] * .3 + tone[1] * .59 + tone[2] * .11) / 255;
+  const shade = `rgb(${tone.map(v => Math.round(v * .16)).join(',')})`;
+  const sc = set.bg.k === 'custom' ? {skew: 0, len: .2, dark: .45} : set.bg;
+  // Shadows come from the silhouette itself, so every sole gets its own: copies of the silhouette moved a
+  // little down (and squashed toward the floor for the softer ones), blurred, and kept only below the
+  // upper part of the product so no dark halo rings its top.
+  const keepLow = (layer, from) => {
+    const lg = layer.getContext('2d'), gr = lg.createLinearGradient(0, dy + dh * from, 0, foot);
+    gr.addColorStop(0, 'rgba(0,0,0,0)'); gr.addColorStop(1, 'rgba(0,0,0,1)');
+    lg.globalCompositeOperation = 'destination-in'; lg.fillStyle = gr; lg.fillRect(0, 0, W, H);   // below the lowest sole the gradient stays at full
+  };
+  const layer = (squash, down, lean, blur, alpha, from) => {
+    const l = canvas(W, H), lg = l.getContext('2d');
+    // squash toward the product's bottom edge and slide down; lean pushes the top sideways
+    lg.setTransform(1, 0, lean, squash, -lean * foot, foot - squash * foot + down);
+    lg.drawImage(sil, 0, 0); lg.setTransform(1, 0, 0, 1, 0, 0);
+    const soft = soften(l, blur); l.width = l.height = 0;
+    keepLow(soft, from);
+    const sgc = soft.getContext('2d'); sgc.globalCompositeOperation = 'source-in'; sgc.fillStyle = shade; sgc.fillRect(0, 0, W, H);
+    g.globalAlpha = alpha; g.drawImage(soft, 0, 0); g.globalAlpha = 1; soft.width = soft.height = 0;
+  };
+  const dark = sc.dark * (lum < .25 ? 1.2 : 1);
+  layer(1, H * .03, sc.skew * .25, W * .07, dark * .55, .35);          // broad soft shade around the base
+  layer(.85, H * .012, sc.skew * .15, W * .025, dark * .8, .55);       // cast shadow hugging the soles
+  layer(1, H * .004, 0, W * .007, Math.min(.95, dark * 1.7), .8);      // contact: darkest right under the soles
+  sil.width = sil.height = 0;
+  // the product, nudged toward the scene's light: darker scenes darken it a touch, warm floors warm it
+  const pc = canvas(Math.round(dw), Math.round(dh)), pg = pc.getContext('2d');
+  pg.drawImage(p, 0, 0, pc.width, pc.height);
+  const kL = Math.max(.76, Math.min(1.02, .78 + lum * .3)), mean = (tone[0] + tone[1] + tone[2]) / 3 || 1;
+  pg.globalCompositeOperation = 'source-atop';
+  pg.fillStyle = `rgba(${tone.map(v => Math.round(Math.min(255, v / mean * 128 * kL * 2) / 2)).join(',')},.08)`;
+  pg.fillRect(0, 0, pc.width, pc.height);
+  if (kL < 1) { pg.fillStyle = `rgba(0,0,0,${(1 - kL).toFixed(3)})`; pg.fillRect(0, 0, pc.width, pc.height); }
+  pg.globalCompositeOperation = 'source-atop';
+  const fall = pg.createLinearGradient(0, 0, 0, pc.height);
+  fall.addColorStop(0, 'rgba(0,0,0,0)'); fall.addColorStop(1, `rgba(0,0,0,${(.06 + (1 - lum) * .1).toFixed(3)})`);
+  pg.fillStyle = fall; pg.fillRect(0, 0, pc.width, pc.height);
+  g.drawImage(pc, dx, dy);
+  pc.width = pc.height = 0;
   return out;
 }
 
@@ -412,7 +489,7 @@ async function cutout(base) {
   const seen = {};
   const blob = await toJpeg(base, .95);
   const png = await lib.removeBackground(blob, {
-    publicPath: new URL('bgdata/', location.href).href, model: 'small', proxyToWorker: false,
+    publicPath: new URL('bgdata/', location.href).href, model: 'medium', proxyToWorker: false,
     output: {format: 'image/png', type: 'foreground'},
     progress: (key, cur, total) => {
       if (!/fetch/.test(key) || !total) return;
@@ -422,29 +499,6 @@ async function cutout(base) {
     }
   });
   return png;
-}
-// Where the product stands: its box in 0..1 units, read from the cut-out's alpha. null when nothing was found.
-async function boxOf(cutImg) {
-  const k = 200 / Math.max(cutImg.naturalWidth, cutImg.naturalHeight), w = Math.max(1, Math.round(cutImg.naturalWidth * k)), h = Math.max(1, Math.round(cutImg.naturalHeight * k));
-  const c = canvas(w, h), g = c.getContext('2d'); g.drawImage(cutImg, 0, 0, w, h);
-  const d = g.getImageData(0, 0, w, h).data; let x0 = w, x1 = -1, y0 = h, y1 = -1, n = 0;
-  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) if (d[(y*w + x) * 4 + 3] > 128) { n++; if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
-  c.width = c.height = 0;
-  return n > w * h * .01 ? {x0: x0 / w, x1: (x1 + 1) / w, y0: y0 / h, y1: (y1 + 1) / h} : null;
-}
-function compose(base, cut, box, set) {
-  const w = base.width, h = base.height;
-  if (!set.bg || !cut || !box) { const c = canvas(w, h); c.getContext('2d').drawImage(base, 0, 0); return c; }
-  const c = renderBg(set.bg, w, h, set.seed), g = c.getContext('2d');
-  const cx = (box.x0 + box.x1) / 2 * w, cy = box.y1 * h - h * .006, rx = (box.x1 - box.x0) / 2 * w * .92, ry = Math.max(h * .012, rx * .14);
-  if (box.y1 < .995) {
-    g.save(); g.translate(cx, cy); g.scale(1, ry / rx);
-    const sg = g.createRadialGradient(0, 0, 0, 0, 0, rx), a = isDark(set.bg) ? .5 : .3;
-    sg.addColorStop(0, `rgba(0,0,0,${a})`); sg.addColorStop(.55, `rgba(0,0,0,${a * .45})`); sg.addColorStop(1, 'rgba(0,0,0,0)');
-    g.fillStyle = sg; g.beginPath(); g.arc(0, 0, rx, 0, 6.3); g.fill(); g.restore();
-  }
-  g.drawImage(cut, 0, 0, w, h);
-  return c;
 }
 // ZIP without compression: JPEGs are already compressed.
 function zip(items) {
@@ -497,10 +551,9 @@ let uid = 0, chain = Promise.resolve(), errs = new Set(), cutErrs = new Set();
 const enqueue = fn => (chain = chain.then(fn).catch(e => console.error(e)));
 const allCells = () => sets.flatMap(set => sources.map(s => set.cells[s.i]).filter(Boolean));
 
-function remember() { try { localStorage.setItem('pu-set3', JSON.stringify(st)); } catch (e) {} }
+function remember() { try { localStorage.setItem('pu-set4', JSON.stringify(st)); } catch (e) {} }
 function paintControls() {
   for (const [id, v] of [['mode', st.mode], ['level', st.level]]) for (const b of $(id).children) b.setAttribute('aria-pressed', b.dataset.v === v);
-  for (const b of $('kinds').children) b.setAttribute('aria-pressed', !!st.kinds[b.dataset.k]);
   const u = st.mode === 'u';
   $('sets').value = st.sets;
   $('bgOn').checked = st.bg;
@@ -510,7 +563,7 @@ function paintControls() {
   $('bgNote').hidden = !u || !st.bg;
   $('bgNote').textContent = bgBlocked()
     ? 'Здесь, внутри Claude, фон меняется только на примере. Для своих фото открой сайт shishamaster123.github.io/photo.'
-    : 'Товар вырезается автоматически. При первом запуске загрузится нейросеть (44 МБ, один раз), дальше работает без интернета.';
+    : 'Товар вырезается автоматически. При первом запуске загрузится нейросеть (90 МБ, один раз, лучше по Wi‑Fi), дальше работает без интернета.';
 }
 function paintBar() {
   const v = allCells(), n = v.filter(r => r.sel).length;
@@ -530,7 +583,9 @@ function paintBar() {
 function finalStatus() {
   const v = allCells().length;
   let t = `Готово: <b>${v} ${plural(v, 'фото', 'фото', 'фото')}</b>` + (st.mode === 'u' ? ` в ${sets.length} ${plural(sets.length, 'комплекте', 'комплектах', 'комплектах')}` : '') + ', все без метаданных';
-  if (cutErrs.size) t += `. Фон не удалось заменить: ${esc([...cutErrs].join(', '))}`;
+  const kept = sources.filter(s => s.box !== undefined && !onScene(s)).map(num);
+  if (st.mode === 'u' && st.bg && kept.length) t += `. На своём фоне: ${kept.join(', ')}`;
+  if (cutErrs.size) t += `. Товар не вырезался: ${esc([...cutErrs].join(', '))}`;
   if (errs.size) t += `. Не открылись: ${esc([...errs].join(', '))}`;
   $('status').innerHTML = t;
 }
@@ -542,6 +597,13 @@ function labHtml(set) {
   return `<div class="lab"><span class="letter">${set.L}</span><span class="acts">${bg}<button class="ib" type="button" data-re="${set.j}" aria-label="Пересоздать неотмеченные фото комплекта ${set.L}">↻</button><button class="ib" type="button" data-all="${set.j}" aria-label="Отметить весь комплект ${set.L}">✓</button></span></div>`;
 }
 const cellName = (set, s) => set.L + num(s);
+// Whether this photo goes onto the scene: closeups stay on their own background unless switched on by hand.
+const onScene = s => s.mode === 'on' || (s.mode !== 'off' && !(s.box && isCloseup(s.box)) && s.prodBlob !== null);
+function colHtml(s) {
+  const sw = st.mode === 'u' && st.bg && s.box !== undefined
+    ? `<button class="ib" type="button" data-col="${s.i}" aria-pressed="${onScene(s)}" title="Ставить это фото на сцену">${onScene(s) ? 'На сцене' : 'Свой фон'}</button>` : '';
+  return `<div class="colh" id="h-${s.i}" title="${esc(s.file.name)}"><span class="nm"><b>${num(s)}</b>${esc(s.file.name)}</span>${sw}</div>`;
+}
 function cellHtml(set, s) {
   const r = set.cells[s.i];
   if (!r) return `<div class="fr wait" id="c-${set.j}-${s.i}"><div class="ph">…</div><span class="cap"><span class="no">${cellName(set, s) || num(s)}</span></span></div>`;
@@ -551,7 +613,7 @@ const origHtml = s => `<figure class="fr orig" id="o-${s.i}"><div class="ph">${s
 function buildGrid() {
   const g = $('grid');
   g.style.setProperty('--cols', sources.length);
-  g.innerHTML = `<div class="lab head"></div>` + sources.map(s => `<div class="colh" title="${esc(s.file.name)}"><b>${num(s)}</b>${esc(s.file.name)}</div>`).join('') +
+  g.innerHTML = `<div class="lab head"></div>` + sources.map(colHtml).join('') +
     `<div class="lab"><span class="t">Оригинал</span></div>` + sources.map(origHtml).join('') +
     sets.map(set => labHtml(set) + sources.map(s => cellHtml(set, s)).join('')).join('');
   for (const r of allCells()) r.fresh = false;
@@ -573,22 +635,24 @@ async function prepare(s, my) {
   if (!s.thumb) { s.w = img.naturalWidth; s.h = img.naturalHeight; s.thumb = await thumb(img, s.w, s.h); const o = $(`o-${s.i}`); if (o) o.outerHTML = origHtml(s); }
   const base = fit(img, st.mode === 'u' ? MAX_U : MAX_S);
   dropImg(img);
-  let cut = null;
-  if (st.mode === 'u' && st.bg && sets.some(set => set.bg)) {
-    if (s.cutBlob === undefined) {
-      if (bgBlocked()) s.cutBlob = null;
-      else {
-        $('status').innerHTML = `Вырезаю фон: <b>${s.file.name}</b>`;
+  let prod = null;
+  if (st.mode === 'u' && st.bg && sets.some(set => set.bg) && !bgBlocked()) {
+    if (s.prodBlob === undefined) {
+      if (s.cutBlob === undefined && bgBlocked()) s.cutBlob = null;
+      if (s.cutBlob === undefined) {
+        $('status').innerHTML = `Вырезаю товар: <b>${esc(s.file.name)}</b>`;
         try { s.cutBlob = await cutout(base); } catch (e) { console.error(e); s.cutBlob = null; cutErrs.add(s.file.name); }
       }
+      if (s.cutBlob) {
+        const cutImg = await openImg(s.cutBlob), r = refineCut(cutImg, base); dropImg(cutImg);
+        if (r) { s.box = r.box; s.prodBlob = await new Promise(ok => r.product.toBlob(ok, 'image/png')); r.product.width = r.product.height = 0; }
+        else { s.box = null; s.prodBlob = null; }
+      } else { s.box = null; s.prodBlob = null; }
+      const h = $(`h-${s.i}`); if (h) h.outerHTML = colHtml(s);
     }
-    if (s.cutBlob && my === running) {
-      cut = await openImg(s.cutBlob);
-      if (s.box === undefined) s.box = await boxOf(cut);
-      if (!s.box) cutErrs.add(s.file.name);
-    }
+    if (s.prodBlob && onScene(s) && my === running) prod = {product: await openImg(s.prodBlob)};
   }
-  return {base, cut};
+  return {base, prod};
 }
 async function renderCells(s, list, my, prog) {
   let prep;
@@ -599,7 +663,12 @@ async function renderCells(s, list, my, prog) {
     await pause();
     try {
       let r;
-      if (st.mode === 'u') { const comp = compose(prep.base, prep.cut, s.box, set); r = await uniquify(comp, set.look, P[st.level]); comp.width = comp.height = 0; }
+      if (st.mode === 'u') {
+        let comp;
+        if (prep.prod && set.bg) comp = await composeScene(prep.base, prep.prod, set);
+        else { comp = canvas(prep.base.width, prep.base.height); comp.getContext('2d').drawImage(prep.base, 0, 0); }
+        r = await uniquify(comp, set.look, P[st.level]); comp.width = comp.height = 0;
+      }
       else { const th = await thumb(prep.base, prep.base.width, prep.base.height); r = {blob: await toJpeg(prep.base, .95), w: prep.base.width, h: prep.base.height, thumb: th}; }
       if (my !== running) { URL.revokeObjectURL(r.thumb); break; }
       placeCell(set, s, r);
@@ -607,7 +676,7 @@ async function renderCells(s, list, my, prog) {
     prog.done++;
   }
   prep.base.width = prep.base.height = 0;
-  dropImg(prep.cut);
+  if (prep.prod) dropImg(prep.prod.product);
 }
 const finish = my => { if (my === running) { finalStatus(); paintBar(); } };
 function newSet(j, bg) { return {j, L: st.mode === 'u' ? LETTERS[j] : '', bg: bg || null, seed: Math.floor(rnd() * 2 ** 31), look: makeLook(P[st.level]), cells: []}; }
@@ -656,18 +725,22 @@ let pickFor = null;
 function openPicker(set) {
   pickFor = set;
   $('dlgTitle').textContent = `Фон комплекта ${set.L}`;
-  const groups = ['solid', 'studio', 'texture'].map(k => [k, PRESETS.filter(p => p.k === k)]);
-  if (customs.length) groups.push(['custom', customs]);
-  $('dlgBody').innerHTML = groups.map(([k, list]) => `<h3>${KIND_NAMES[k]}</h3><div class="swg">${list.map(p => `<button class="swb" type="button" data-pick="${p.id}" aria-current="${set.bg === p}"><span style="background-image:url(${swatch(p)})"></span><span>${esc(p.n)}</span></button>`).join('')}</div>`).join('');
+  const groups = [['Сцены', SCENES]];
+  if (customs.length) groups.push(['Свои фоны', customs]);
+  $('dlgBody').innerHTML = groups.map(([k, list]) => `<h3>${k}</h3><div class="swg">${list.map(p => `<button class="swb" type="button" data-pick="${p.id}" aria-current="${set.bg === p}"><span style="background-image:url(${swatch(p)})"></span><span>${esc(p.n)}</span></button>`).join('')}</div>`).join('');
   if (!$('dlg').open) $('dlg').showModal();
 }
 async function addCustoms(files) {
   const added = [];
   for (const f of files) {
-    try { const img = await loadImg(f); const spec = {k: 'custom', id: 'c' + (customs.length + 1), n: baseName(f.name), img}; customs.push(spec); added.push(spec); }
+    try {
+      const img = await loadImg(f), t = canvas(240, 180), tk = Math.max(240 / img.naturalWidth, 180 / img.naturalHeight);
+      t.getContext('2d').drawImage(img, (240 - img.naturalWidth * tk) / 2, (180 - img.naturalHeight * tk) / 2, img.naturalWidth * tk, img.naturalHeight * tk);
+      const spec = {k: 'custom', id: 'c' + (customs.length + 1), n: baseName(f.name), img, thumb: t.toDataURL('image/jpeg', .8)};
+      customs.push(spec); added.push(spec);
+    }
     catch (e) { $('status').textContent = `${f.name}: фон не открылся`; }
   }
-  if (added.length && !st.kinds.custom) { st.kinds.custom = true; remember(); }
   paintControls();
   return added;
 }
@@ -744,10 +817,6 @@ for (const id of ['mode', 'level']) $(id).addEventListener('click', e => {
   const b = e.target.closest('button'); if (!b || b.dataset.v === st[id]) return;
   st[id] = b.dataset.v; remember(); paintControls(); run();
 });
-$('kinds').addEventListener('click', e => {
-  const b = e.target.closest('button'); if (!b) return;
-  st.kinds[b.dataset.k] = !st.kinds[b.dataset.k]; remember(); paintControls(); run();
-});
 $('bgOn').addEventListener('change', e => { st.bg = e.target.checked; remember(); paintControls(); run(); });
 $('minus').onclick = () => changeSets(st.sets - 1);
 $('plus').onclick = () => changeSets(st.sets + 1);
@@ -766,7 +835,7 @@ $('bgFile2').addEventListener('change', async e => {
 });
 $('dlgBody').addEventListener('click', e => {
   const b = e.target.closest('[data-pick]'); if (!b || !pickFor) return;
-  const spec = [...PRESETS, ...customs].find(p => p.id === b.dataset.pick);
+  const spec = [...SCENES, ...customs].find(p => p.id === b.dataset.pick);
   $('dlg').close(); if (spec && spec !== pickFor.bg) changeBg(pickFor, spec);
 });
 $('dlgClose').onclick = () => $('dlg').close();
@@ -775,6 +844,13 @@ document.addEventListener('drop', e => { e.preventDefault(); addFiles(e.dataTran
 $('grid').addEventListener('click', e => {
   const t = e.target.closest('button'); if (!t) return;
   if (t.dataset.bg) return openPicker(sets[+t.dataset.bg]);
+  if (t.dataset.col) {
+    const s = sources[+t.dataset.col];
+    s.mode = onScene(s) ? 'off' : 'on';
+    t.outerHTML = colHtml(s);
+    for (const set of sets) if (set.cells[s.i]) set.cells[s.i].sel = false;
+    return regenPairs(sets.map(set => [set, s]), `Пересобираю фото ${num(s)}`);
+  }
   if (t.dataset.re) { const set = sets[+t.dataset.re]; return regenPairs(unmarkedPairs([set]), `Пересоздаю комплект ${set.L}`); }
   if (t.dataset.all) {
     const set = sets[+t.dataset.all], cells = sources.map(s => set.cells[s.i]).filter(Boolean), v = !cells.every(r => r.sel);
@@ -807,7 +883,7 @@ function initClaude() {
 initClaude(); setTimeout(initClaude, 1500);
 if (!inClaude() && navigator.serviceWorker) navigator.serviceWorker.register('sw.js').catch(() => {});
 if (desktop()) $('hint').textContent = 'Нажми на фото, чтобы отметить его, или «✓» у буквы, чтобы отметить весь комплект. «Фон» у буквы меняет фон всего комплекта, «↻» пересоздаёт его неотмеченные фото. «Скачать отмеченные» сохранит каждое фото отдельным файлом; если браузер спросит про загрузку нескольких файлов, нажми «Разрешить».';
-window.__pu = {zip, results: allCells, idle: () => chain, sets: () => sets};
+window.__pu = {zip, results: allCells, idle: () => chain, sets: () => sets, boxes: () => sources.map(s => s.box)};
 }
 </script>
 </body>
